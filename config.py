@@ -21,7 +21,7 @@ SWING_AREA = "Wick Extremity"  # Options: "Wick Extremity" or "Full Range"
 # DAILY TREND DETECTION (NEW FEATURE)
 # Determines trend direction and identifies POI zones
 ENABLE_DAILY_TREND = True  # Enable daily trend-based POI detection
-TREND_LOOKBACK_DAYS = 3    # Number of previous days to analyze for trend (2-3 recommended)
+TREND_LOOKBACK_DAYS = 2    # Number of previous days to analyze for trend (2-3 recommended)
                            # Looks at previous 2-3 completed days (excluding today)
                            # Uptrend: Previous lows not taken out (higher lows)
                            # Downtrend: Previous highs not taken out (lower highs)
