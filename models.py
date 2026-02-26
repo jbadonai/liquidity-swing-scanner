@@ -152,3 +152,88 @@ class FVGAlert:
         message += f"   {self.original_sweep.swing_type.title()} swept at `{self.original_sweep.sweep_price:.8f}`\n"
         
         return message
+
+
+@dataclass
+class CRTAlert:
+    """Alert data for CRT (Change of Retail Tendency) pattern"""
+    pair: str
+    crt_type: str  # "bullish" or "bearish"
+    candle_1_high: float
+    candle_1_low: float
+    candle_2_high: float
+    candle_2_low: float
+    candle_2_close: float
+    candle_2_open: float
+    sweep_price: float  # The low (bullish) or high (bearish) that was swept
+    timestamp: datetime
+    candle_1_timestamp: datetime
+    timeframe: str = "4h"
+    
+    def format_message(self) -> str:
+        """Format CRT alert message for Telegram"""
+        crt_emoji = "🟢" if self.crt_type == "bullish" else "🔴"
+        crt_label = "BULLISH CRT" if self.crt_type == "bullish" else "BEARISH CRT"
+        direction = "UP ⬆️" if self.crt_type == "bullish" else "DOWN ⬇️"
+
+        # Calculate take profit (opposite liquidity)
+        if self.crt_type == "bullish":
+            # Bullish: swept low, target high
+            take_profit = self.candle_1_high
+            tp_label = "High"
+        else:
+            # Bearish: swept high, target low
+            take_profit = self.candle_1_low
+            tp_label = "Low"
+
+        message = f"🎯 *{crt_emoji} {crt_label} - ENTRY SIGNAL* 🎯\n\n"
+        message += f"📊 Pair: `{self.pair}`\n"
+        message += f"⏰ Timeframe: *{self.timeframe.upper()}*\n"
+        message += f"📈 Direction: *{direction}*\n\n"
+
+        # TRADING SETUP FIRST - MOST IMPORTANT
+        message += f"━━━━━━━━━━━━━━━━━━━━\n"
+        message += f"💰 *TRADING SETUP*\n"
+        message += f"━━━━━━━━━━━━━━━━━━━━\n\n"
+
+        if self.crt_type == "bullish":
+            message += f"🎯 *Entry:* `{self.candle_2_close:.8f}`\n"
+            message += f"🛑 *Stop Loss:* `{self.sweep_price:.8f}` (below sweep)\n"
+            message += f"💎 *Take Profit:* `{take_profit:.8f}` (opposite {tp_label})\n"
+            message += f"📊 *Risk/Reward:* `{abs(take_profit - self.candle_2_close) / abs(self.candle_2_close - self.sweep_price):.2f}:1`\n\n"
+            message += f"📌 *Bias:* LONG (Buy)\n"
+            message += f"💡 *Rationale:* Low swept → Retail trapped short → Smart money long\n\n"
+        else:
+            message += f"🎯 *Entry:* `{self.candle_2_close:.8f}`\n"
+            message += f"🛑 *Stop Loss:* `{self.sweep_price:.8f}` (above sweep)\n"
+            message += f"💎 *Take Profit:* `{take_profit:.8f}` (opposite {tp_label})\n"
+            message += f"📊 *Risk/Reward:* `{abs(self.candle_2_close - take_profit) / abs(self.sweep_price - self.candle_2_close):.2f}:1`\n\n"
+            message += f"📌 *Bias:* SHORT (Sell)\n"
+            message += f"💡 *Rationale:* High swept → Retail trapped long → Smart money short\n\n"
+
+        # PATTERN DETAILS SECOND
+        message += f"━━━━━━━━━━━━━━━━━━━━\n"
+        message += f"📍 *PATTERN DETAILS*\n"
+        message += f"━━━━━━━━━━━━━━━━━━━━\n\n"
+
+        message += f"Candle 1 (Range):\n"
+        message += f"   • High: `{self.candle_1_high:.8f}`\n"
+        message += f"   • Low: `{self.candle_1_low:.8f}`\n"
+        message += f"   • Size: `{self.candle_1_high - self.candle_1_low:.8f}`\n\n"
+
+        message += f"Candle 2 (CRT Action):\n"
+        message += f"   • Open: `{self.candle_2_open:.8f}`\n"
+        message += f"   • Close: `{self.candle_2_close:.8f}` ✅\n"
+
+        if self.crt_type == "bullish":
+            message += f"   • Swept Low: `{self.sweep_price:.8f}` 🔻\n"
+            message += f"   • Closed back in range ✅\n\n"
+        else:
+            message += f"   • Swept High: `{self.sweep_price:.8f}` 🔺\n"
+            message += f"   • Closed back in range ✅\n\n"
+
+        message += f"⏱️ *Timing:*\n"
+        message += f"   • Candle 1: `{self.candle_1_timestamp.strftime('%Y-%m-%d %H:%M')}`\n"
+        message += f"   • Confirmed: `{self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}`\n"
+
+        return message

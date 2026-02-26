@@ -10,7 +10,8 @@ import config
 from binance_client import BinanceClient
 from telegram_notifier import TelegramNotifier
 from swing_tracker import SwingTracker
-from models import SwingAlert
+from crt_scanner import CRTScanner
+from models import SwingAlert, FVGAlert, CRTAlert
 
 
 class LiquidityScanner:
@@ -20,6 +21,7 @@ class LiquidityScanner:
         self.binance = BinanceClient()
         self.telegram = TelegramNotifier()
         self.tracker = SwingTracker()
+        self.crt_scanner = CRTScanner() if config.ENABLE_CRT_DETECTION else None
         self.pairs = config.PAIRS
         self.timeframe = config.TIMEFRAME
         self.scan_interval = config.SCAN_INTERVAL
@@ -48,6 +50,13 @@ class LiquidityScanner:
             print(f"   • Monitoring for FVG formations after sweeps")
             print(f"   • Lookback window: {config.FVG_LOOKBACK_CANDLES} candles")
             print(f"   • Requirements: Gap + 2x body ratio + close in range")
+        
+        # Show CRT status
+        if config.ENABLE_CRT_DETECTION:
+            print(f"\n🎯 CRT DETECTION ENABLED:")
+            print(f"   • Monitoring {config.CRT_TIMEFRAME.upper()} candles for CRT patterns")
+            print(f"   • Pattern: Sweep high/low + close back in range")
+            print(f"   • Independent scan (parallel to POI/swing detection)")
         
         print(f"\n⏱️  Scan Interval: {self.scan_interval}s")
         print("=" * 60)
@@ -100,15 +109,17 @@ class LiquidityScanner:
     def scan_pair(self, pair: str) -> tuple:
         """
         Scan a single pair for swing points and swept liquidity
+        Also scans for CRT patterns on 4H if enabled
         
         Args:
             pair: Trading pair to scan
             
         Returns:
-            Tuple of (pair, alerts, active_swings, daily_context, error)
+            Tuple of (pair, sweep_alerts, fvg_alerts, crt_alert, active_swings, daily_context, error)
         """
         try:
             daily_context = None
+            crt_alert = None
             
             # Fetch intraday market data (used for both POI detection and swing detection)
             data = self.binance.get_klines(
@@ -118,79 +129,94 @@ class LiquidityScanner:
             )
             
             if data is None:
-                return (pair, [], [], {}, None, "Failed to fetch intraday data")
-
+                return (pair, [], [], None, {}, None, "Failed to fetch intraday data")
+            
+            # CRT Detection (independent, runs in parallel)
+            if config.ENABLE_CRT_DETECTION:
+                # Fetch 4H candles for CRT detection
+                # Need at least 3 to ensure we check completed candles only
+                crt_candles = self.binance.get_klines(
+                    pair,
+                    config.CRT_TIMEFRAME,
+                    10  # Fetch more candles to ensure we have completed ones
+                )
+                
+                if crt_candles and len(crt_candles) >= 3:
+                    crt_alert = self.crt_scanner.scan_pair(pair, crt_candles)
+            
             # Fetch daily candles if POI mode enabled
             if config.ENABLE_DAILY_TREND:
                 daily_candles = self.binance.get_daily_candles(
                     pair,
                     config.TREND_LOOKBACK_DAYS + 1  # +1 for today
                 )
-
+                
                 if daily_candles and len(daily_candles) > config.TREND_LOOKBACK_DAYS:
                     # Separate today's candle from historical
                     # We exclude today completely - using only completed days
                     historical_daily = daily_candles[:-1]  # Exclude today for trend analysis
-
+                    
                     # Update daily trend context
                     # Daily open = yesterday's close (prev day close in historical_daily)
                     daily_context = self.tracker.update_daily_context(pair, historical_daily)
-
+                    
                     # If strict POI mode and no trend detected, skip this pair
                     if config.SKIP_PAIRS_WITHOUT_TREND and daily_context is None:
-                        return (pair, [], [], {}, None, "No clear trend detected (skipped in strict POI mode)")
+                        return (pair, [], [], crt_alert, {}, None, "No clear trend detected (skipped in strict POI mode)")
 
-
+            
             # Process intraday data and detect swings on configured timeframe
             # (with POI context if available from daily analysis)
             # Returns tuple: (sweep_alerts, fvg_alerts)
             sweep_alerts, fvg_alerts = self.tracker.process_market_data(pair, data, daily_context)
-
+            
             # Combine all alerts
             all_alerts = sweep_alerts + fvg_alerts
-
+            
             # Enhance sweep alerts with POI context
             if daily_context and sweep_alerts:
                 for alert in sweep_alerts:
                     alert.poi_context = daily_context
-
+            
             # Get active swing counts
             active_swings = self.tracker.get_active_swings(pair)
-
-            return (pair, sweep_alerts, fvg_alerts, active_swings, daily_context, None)
-
+            
+            return (pair, sweep_alerts, fvg_alerts, crt_alert, active_swings, daily_context, None)
+            
         except Exception as e:
-            return (pair, [], [], {}, None, str(e))
-
+            return (pair, [], [], None, {}, None, str(e))
+    
     def scan_all_pairs(self) -> Dict:
         """
         Scan all pairs concurrently
-
+        
         Returns:
             Dict with scan results and statistics
         """
         results = {
             "total_sweep_alerts": 0,
             "total_fvg_alerts": 0,
+            "total_crt_alerts": 0,
             "successful_scans": 0,
             "failed_scans": 0,
             "skipped_scans": 0,
             "sweep_alerts": [],
             "fvg_alerts": [],
+            "crt_alerts": [],
             "active_swings": {},
             "daily_contexts": {}
         }
-
+        
         # Use ThreadPoolExecutor for concurrent API requests
         with ThreadPoolExecutor(max_workers=config.MAX_WORKERS) as executor:
             future_to_pair = {
-                executor.submit(self.scan_pair, pair): pair
+                executor.submit(self.scan_pair, pair): pair 
                 for pair in self.pairs
             }
-
+            
             for future in as_completed(future_to_pair):
-                pair, sweep_alerts, fvg_alerts, active_swings, daily_context, error = future.result()
-
+                pair, sweep_alerts, fvg_alerts, crt_alert, active_swings, daily_context, error = future.result()
+                
                 if error:
                     # Different handling for skipped pairs vs actual errors
                     if "No clear trend" in error and config.SKIP_PAIRS_WITHOUT_TREND:
@@ -204,24 +230,31 @@ class LiquidityScanner:
                     results["active_swings"][pair] = active_swings
                     if daily_context:
                         results["daily_contexts"][pair] = daily_context
-
+                    
                     # Track sweep alerts
                     if sweep_alerts:
                         results["total_sweep_alerts"] += len(sweep_alerts)
                         results["sweep_alerts"].extend(sweep_alerts)
-
+                    
                     # Track FVG alerts
                     if fvg_alerts:
                         results["total_fvg_alerts"] += len(fvg_alerts)
                         results["fvg_alerts"].extend(fvg_alerts)
-
+                    
+                    # Track CRT alerts
+                    if crt_alert:
+                        results["total_crt_alerts"] += 1
+                        results["crt_alerts"].append(crt_alert)
+                    
                     # Display status
-                    if sweep_alerts or fvg_alerts:
+                    if sweep_alerts or fvg_alerts or crt_alert:
                         alert_msg = []
                         if sweep_alerts:
                             alert_msg.append(f"{len(sweep_alerts)} sweep(s)")
                         if fvg_alerts:
                             alert_msg.append(f"{len(fvg_alerts)} FVG(s)")
+                        if crt_alert:
+                            alert_msg.append(f"1 CRT ({crt_alert.crt_type})")
                         print(f"   🚨 {pair}: {' + '.join(alert_msg)} detected!")
                     else:
                         # Show status based on mode
@@ -239,16 +272,16 @@ class LiquidityScanner:
                             low_count = active_swings.get("low", 0)
                             high_liq = active_swings.get("high_liquidity", 0)
                             low_liq = active_swings.get("low_liquidity", 0)
-
+                            
                             if config.FILTER_VALUE > 0:
                                 print(f"   ✅ {pair}: {high_count}H/{low_count}L swings ({high_liq}H/{low_liq}L liquidity zones)")
                             else:
                                 print(f"   ✅ {pair}: {high_count}H/{low_count}L liquidity swings")
-
+        
         return results
-
-    def send_alerts(self, sweep_alerts: List, fvg_alerts: List):
-        """Send Telegram alerts for swept liquidity and FVG formations"""
+    
+    def send_alerts(self, sweep_alerts: List, fvg_alerts: List, crt_alerts: List):
+        """Send Telegram alerts for swept liquidity, FVG formations, and CRT patterns"""
         # Send sweep alerts
         for alert in sweep_alerts:
             # Pass POI manager if in POI mode
@@ -256,14 +289,13 @@ class LiquidityScanner:
                 message = alert.format_message(self.tracker.poi_manager)
             else:
                 message = alert.format_message()
-
+            
             success = self.telegram.send_message(message)
             if success:
-                alert_type = "POI sweep" if config.ENABLE_DAILY_TREND else "liquidity sweep"
                 print(f"   📤 Sweep alert sent for {alert.pair}")
             else:
                 print(f"   ❌ Failed to send sweep alert for {alert.pair}")
-
+        
         # Send FVG alerts
         for alert in fvg_alerts:
             message = alert.format_message()
@@ -272,7 +304,16 @@ class LiquidityScanner:
                 print(f"   📤 FVG alert sent for {alert.pair} ({alert.fvg_type})")
             else:
                 print(f"   ❌ Failed to send FVG alert for {alert.pair}")
-
+        
+        # Send CRT alerts
+        for alert in crt_alerts:
+            message = alert.format_message()
+            success = self.telegram.send_message(message)
+            if success:
+                print(f"   📤 CRT alert sent for {alert.pair} ({alert.crt_type} on {alert.timeframe.upper()})")
+            else:
+                print(f"   ❌ Failed to send CRT alert for {alert.pair}")
+    
     def countdown(self, seconds: int):
         """Display countdown timer on single line"""
         for remaining in range(seconds, 0, -1):
@@ -281,62 +322,62 @@ class LiquidityScanner:
             print(f"\r{timer}", end="", flush=True)
             time.sleep(1)
         print("\r" + " " * 50 + "\r", end="", flush=True)  # Clear line
-
+    
     def run(self):
         """Main run loop"""
         if not self.initialize():
             print("\n❌ Initialization failed. Exiting.")
             return
-
+        
         print("\n" + "=" * 60)
         print("🚀 Scanner started! Press Ctrl+C to stop")
         print("=" * 60 + "\n")
-
+        
         self.running = True
         scan_count = 0
-
+        
         try:
             while self.running:
                 scan_count += 1
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
+                
                 print(f"\n{'='*60}")
                 print(f"📊 Scan #{scan_count} - {timestamp}")
                 print(f"{'='*60}")
-
+                
                 # Scan all pairs
                 results = self.scan_all_pairs()
-
+                
                 # Send alerts if any
-                total_alerts = results["total_sweep_alerts"] + results["total_fvg_alerts"]
+                total_alerts = results["total_sweep_alerts"] + results["total_fvg_alerts"] + results["total_crt_alerts"]
                 if total_alerts > 0:
-                    print(f"\n🔔 Sending {results['total_sweep_alerts']} sweep + {results['total_fvg_alerts']} FVG alert(s)...")
-                    self.send_alerts(results["sweep_alerts"], results["fvg_alerts"])
-
+                    print(f"\n🔔 Sending {results['total_sweep_alerts']} sweep + {results['total_fvg_alerts']} FVG + {results['total_crt_alerts']} CRT alert(s)...")
+                    self.send_alerts(results["sweep_alerts"], results["fvg_alerts"], results["crt_alerts"])
+                
                 # Print summary
                 print(f"\n📈 Scan Summary:")
                 print(f"   ✅ Successful: {results['successful_scans']}/{len(self.pairs)}")
-
+                
                 if config.ENABLE_DAILY_TREND and config.SKIP_PAIRS_WITHOUT_TREND and results['skipped_scans'] > 0:
                     print(f"   ⏭️  Skipped (no trend): {results['skipped_scans']}/{len(self.pairs)}")
-
+                
                 if results['failed_scans'] > 0:
                     print(f"   ❌ Failed: {results['failed_scans']}/{len(self.pairs)}")
-
-                print(f"   🚨 Alerts: {results['total_sweep_alerts']} sweeps, {results['total_fvg_alerts']} FVGs")
-
+                
+                print(f"   🚨 Alerts: {results['total_sweep_alerts']} sweeps, {results['total_fvg_alerts']} FVGs, {results['total_crt_alerts']} CRTs")
+                
                 if config.ENABLE_DAILY_TREND:
                     # POI mode summary
                     total_active_pois = sum(
-                        s.get("high_liquidity", 0) + s.get("low_liquidity", 0)
+                        s.get("high_liquidity", 0) + s.get("low_liquidity", 0) 
                         for s in results["active_swings"].values()
                     )
                     total_mitigated = sum(
-                        s.get("mitigated_total", 0)
+                        s.get("mitigated_total", 0) 
                         for s in results["active_swings"].values()
                     )
                     pairs_with_trend = len(results.get("daily_contexts", {}))
-
+                    
                     print(f"   🎯 Pairs with Trend: {pairs_with_trend}/{len(self.pairs)}")
                     print(f"   💧 Active POIs: {total_active_pois}")
                     print(f"   ❌ Mitigated Today: {total_mitigated}")
@@ -346,24 +387,24 @@ class LiquidityScanner:
                     total_lows = sum(s.get("low", 0) for s in results["active_swings"].values())
                     total_high_liq = sum(s.get("high_liquidity", 0) for s in results["active_swings"].values())
                     total_low_liq = sum(s.get("low_liquidity", 0) for s in results["active_swings"].values())
-
+                    
                     if config.FILTER_VALUE > 0:
                         print(f"   📍 Total Swings: {total_highs}H/{total_lows}L")
                         print(f"   💧 Liquidity Zones: {total_high_liq}H/{total_low_liq}L (qualified with {config.FILTER_BY} > {config.FILTER_VALUE})")
                     else:
                         print(f"   💧 Liquidity Swings: {total_highs}H/{total_lows}L")
-
+                
                 # Countdown to next scan
                 if self.running:
                     self.countdown(self.scan_interval)
-
+                
         except KeyboardInterrupt:
             print("\n\n⏹️  Scanner stopped by user")
             self.running = False
         except Exception as e:
             print(f"\n\n❌ Unexpected error: {e}")
             self.running = False
-
+        
         print("\n" + "=" * 60)
         print("👋 Scanner terminated")
         print("=" * 60)
