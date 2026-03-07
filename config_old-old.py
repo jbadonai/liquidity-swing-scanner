@@ -7,7 +7,6 @@ TELEGRAM_CHAT_ID = "5252531829"
 # Trading Pairs to Monitor
 PAIRS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "BNBUSDT", "BTCUSDC", "ETHUSDC", "ADAUSDT", "LINKUSDT"]
 
-
 # Binance API Settings
 BINANCE_API_BASE = "https://api.binance.com/"
 KLINES_LIMIT = 100  # Number of candles to fetch (should be > pivot_lookback * 2)
@@ -66,12 +65,6 @@ ENABLE_AUTO_TRADE = True     # True: Auto-execute CRT signals on ByBit, False: A
 BYBIT_API_KEY = "EHgJI02LmFspJeDh5m"           # Your ByBit API key
 BYBIT_API_SECRET = "d0D7KjfQN2xsWfpTwH9o771FAa6pBXZG6wkB"        # Your ByBit API secret
 BYBIT_TESTNET = False        # True: Use testnet, False: Use mainnet (REAL MONEY!)
-
-# Signal Freshness
-MAX_SIGNAL_AGE_MINUTES = 245   # Maximum age of signal in minutes (default: 5)
-                             # Signals older than this are considered stale and ignored
-                             # This prevents acting on old signals when scanner restarts
-                             # or after network issues
                              
 # Trading Parameters
 USE_MAX_LEVERAGE = False      # True: Auto-detect and use max leverage, False: Use fixed leverage
@@ -83,7 +76,7 @@ ORDER_VALUE_MULTIPLIER = 1.0 # Multiplier for order size (1.0 = leverage value i
 # Risk Management
 USE_PERCENTAGE_OF_BALANCE = False  # True: Use % of balance, False: Use leverage multiplier
 PERCENTAGE_OF_BALANCE = 10.0       # % of account balance to risk per trade (if enabled)
-MAX_CONCURRENT_TRADES = 2          # Maximum number of open positions at once
+MAX_CONCURRENT_TRADES = 5          # Maximum number of open positions at once
 
 # Order Execution
 MARKET_ORDER = True          # True: Market order (immediate), False: Limit order

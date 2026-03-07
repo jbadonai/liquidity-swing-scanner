@@ -6,7 +6,7 @@ TELEGRAM_CHAT_ID = "5252531829"
 
 # Trading Pairs to Monitor
 PAIRS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "BNBUSDT", "BTCUSDC", "ETHUSDC", "ADAUSDT", "LINKUSDT"]
-# PAIRS = ["ENSOUSDT", "AGLDUSDT", "ALLOUSDT", "KITEUSDT", "AWEUSDT", "ORCAUSDT", "BIOUSDT", "SNXUSDT", "LAUSDT", "RPLUSDT", "DEXEUSDT", "SAPIENUSDT", "DUSKUSDT", "INJUSDT", "FIDAUSDT", "BELUSDT", "JTOUSDT", "EULUSDT", "MORPHOUSDT", "OPUSDT", "DOLOUSDT", "PROMUSDT", "KERNELUSDT", "COTIUSDT", "COWUSDT", "AXLUSDT", "PORTALUSDT", "DOTUSDT", "APTUSDT", "HOLOUSDT", "METUSDT", "0GUSDT", "IOUSDT", "BERAUSDT", "CHRUSDT", "HUMAUSDT", "CYBERUSDT", "INITUSDT", "CTKUSDT", "PUNDIXUSDT", "ETHFIUSDT", "ARUSDT", "PARTIUSDT", "BREVUSDT", "AXSUSDT", "EDENUSDT", "GIGGLEUSDT", "NILUSDT", "KMNOUSDT", "KSMUSDT", "ARPAUSDT", "MITOUSDT", "OGNUSDT", "MUBARAKUSDT", "ARBUSDT", "BBUSDT", "EIGENUSDT", "NEARUSDT", "FILUSDT", "ROSEUSDT", "CTSIUSDT", "PENGUUSDT", "ENAUSDT", "BANKUSDT", "RONINUSDT", "DYDXUSDT", "FLOWUSDT", "RENDERUSDT", "ICPUSDT", "CETUSUSDT", "SIGNUSDT", "ETCUSDT", "ORDIUSDT", "BIGTIMEUSDT", "IMXUSDT", "GUNUSDT", "C98USDT", "DASHUSDT", "ENSUSDT", "ARKMUSDT", "CVXUSDT", "AIXBTUSDT", "EDUUSDT", "2ZUSDT", "METISUSDT", "JUPUSDT", "APEUSDT", "MAVUSDT", "ADAUSDT", "LPTUSDT", "MIRAUSDT", "BICOUSDT", "GLMUSDT", "CRVUSDT", "LRCUSDT", "HFTUSDT", "ACEUSDT", "SANDUSDT", "BANDUSDT", "ONTUSDT", "SKLUSDT", "NTRNUSDT", "GMXUSDT", "MANTAUSDT", "PENDLEUSDT", "POLUSDT", "AAVEUSDT", "BCHUSDT", "CHZUSDT", "LDOUSDT", "AVNTUSDT", "ONDOUSDT", "CUSDT", "FLUXUSDT", "SAGAUSDT", "PHAUSDT", "PNUTUSDT", "HIGHUSDT", "AEVOUSDT", "KAITOUSDT", "GRTUSDT", "HAEDALUSDT", "DIAUSDT", "NXPCUSDT", "MANAUSDT", "ACXUSDT", "SHELLUSDT", "AVAUSDT", "COOKIEUSDT", "AVAXUSDT", "MMTUSDT", "KAVAUSDT", "ENJUSDT", "ALTUSDT", "PEOPLEUSDT", "DOGEUSDT", "HEMIUSDT", "CAKEUSDT", "SOLUSDT", "CFXUSDT", "BANANAUSDT", "REDUSDT", "LINKUSDT", "ILVUSDT", "EPICUSDT", "SAHARAUSDT", "PLUMEUSDT", "HEIUSDT", "ATOMUSDT", "SCRUSDT", "LUMIAUSDT", "PYTHUSDT", "AUSDT", "SFPUSDT", "MASKUSDT", "MINAUSDT", "LISTAUSDT", "GMTUSDT", "HIVEUSDT", "RAREUSDT", "LSKUSDT", "MOVRUSDT", "HOOKUSDT", "PROVEUSDT", "MOVEUSDT", "COMPUSDT", "QTUMUSDT", "MEUSDT", "DYMUSDT", "BLURUSDT", "ACTUSDT", "MAGICUSDT", "EGLDUSDT", "IDUSDT", "ASTRUSDT", "NEWTUSDT", "ICXUSDT", "CELOUSDT", "FORMUSDT", "LTCUSDT", "RDNTUSDT", "OPENUSDT", "NFPUSDT", "BABYUSDT", "CGPTUSDT", "ALICEUSDT", "HOMEUSDT", "SCRTUSDT", "BATUSDT", "1INCHUSDT", "MLNUSDT", "POLYXUSDT", "ALGOUSDT", "ETHUSDT", "FIOUSDT", "BNTUSDT", "BMTUSDT", "IOTAUSDT", "GASUSDT", "RUNEUSDT", "HBARUSDT", "MBOXUSDT", "SEIUSDT", "KAIAUSDT", "KNCUSDT", "POWRUSDT", "ASTERUSDT", "API3USDT", "ERAUSDT", "LQTYUSDT", "CATIUSDT", "NEOUSDT", "HYPERUSDT", "RLCUSDT", "QNTUSDT", "OGUSDT", "MTLUSDT", "OXTUSDT", "ALPINEUSDT", "AUCTIONUSDT", "JSTUSDT", "ONGUSDT", "FFUSDT", "ASRUSDT"]
+
 
 # Binance API Settings
 BINANCE_API_BASE = "https://api.binance.com/"
@@ -60,6 +60,41 @@ CRT_TIMEFRAME = "4h"         # Timeframe for CRT detection (recommended: 4h)
                              # - Bullish CRT: Sweeps low, closes back in range
                              # - Bearish CRT: Sweeps high, closes back in range
                              # - Signal sent only when candle 2 closes (confirmed)
+
+# CRT Quality Filters
+CRT_MAX_BODY_RATIO = 40.0    # Max body of sweep candle as % of range candle body (default: 40%)
+                             # Sweep candle body should be <= 40% of range candle body
+                             # Smaller sweep candle body = stronger reversal signal
+                             # Set to 100 to disable this filter
+
+# BYBIT AUTO-TRADING FOR CRT SIGNALS
+ENABLE_AUTO_TRADE = True     # True: Auto-execute CRT signals on ByBit, False: Alerts only
+BYBIT_API_KEY = "EHgJI02LmFspJeDh5m"           # Your ByBit API key
+BYBIT_API_SECRET = "d0D7KjfQN2xsWfpTwH9o771FAa6pBXZG6wkB"        # Your ByBit API secret
+BYBIT_TESTNET = False        # True: Use testnet, False: Use mainnet (REAL MONEY!)
+
+# Signal Freshness
+MAX_SIGNAL_AGE_MINUTES = 245  # Maximum age of signal in minutes (4 hours + 5 min buffer)
+                              # Signals older than this are considered stale and ignored
+                              # Set to slightly more than CRT_TIMEFRAME to allow detection
+                              # within the current period (4H = 240 min + 5 min buffer = 245)
+                              # This prevents acting on signals from previous 4H periods
+                             
+# Trading Parameters
+USE_MAX_LEVERAGE = False      # True: Auto-detect and use max leverage, False: Use fixed leverage
+FIXED_LEVERAGE = 10          # Used only if USE_MAX_LEVERAGE = False
+ORDER_VALUE_MULTIPLIER = 1.0 # Multiplier for order size (1.0 = leverage value in USDT)
+                             # Example: Max leverage = 50, order value = 50 * 1.0 = $50
+                             # Set to 0.5 for half, 2.0 for double, etc.
+
+# Risk Management
+USE_PERCENTAGE_OF_BALANCE = False  # True: Use % of balance, False: Use leverage multiplier
+PERCENTAGE_OF_BALANCE = 10.0       # % of account balance to risk per trade (if enabled)
+MAX_CONCURRENT_TRADES = 5          # Maximum number of open positions at once
+
+# Order Execution
+MARKET_ORDER = True          # True: Market order (immediate), False: Limit order
+SLIPPAGE_TOLERANCE = 0.001   # 0.1% slippage tolerance for limit orders
 
 # LIQUIDITY FILTER - CRITICAL FOR IDENTIFYING LIQUIDITY ZONES
 # Not all swing points are liquidity swings. A swing becomes a "liquidity zone" only when:
