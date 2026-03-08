@@ -61,6 +61,12 @@ CRT_TIMEFRAME = "4h"         # Timeframe for CRT detection (recommended: 4h)
                              # - Bearish CRT: Sweeps high, closes back in range
                              # - Signal sent only when candle 2 closes (confirmed)
 
+# CRT Quality Filters
+CRT_MAX_BODY_RATIO = 40.0    # Max body of sweep candle as % of range candle body (default: 40%)
+                             # Sweep candle body should be <= 40% of range candle body
+                             # Smaller sweep candle body = stronger reversal signal
+                             # Set to 100 to disable this filter
+
 # BYBIT AUTO-TRADING FOR CRT SIGNALS
 ENABLE_AUTO_TRADE = True     # True: Auto-execute CRT signals on ByBit, False: Alerts only
 BYBIT_API_KEY = "EHgJI02LmFspJeDh5m"           # Your ByBit API key
@@ -68,10 +74,11 @@ BYBIT_API_SECRET = "d0D7KjfQN2xsWfpTwH9o771FAa6pBXZG6wkB"        # Your ByBit AP
 BYBIT_TESTNET = False        # True: Use testnet, False: Use mainnet (REAL MONEY!)
 
 # Signal Freshness
-MAX_SIGNAL_AGE_MINUTES = 245   # Maximum age of signal in minutes (default: 5)
-                             # Signals older than this are considered stale and ignored
-                             # This prevents acting on old signals when scanner restarts
-                             # or after network issues
+MAX_SIGNAL_AGE_MINUTES = 245  # Maximum age of signal in minutes (4 hours + 5 min buffer)
+                              # Signals older than this are considered stale and ignored
+                              # Set to slightly more than CRT_TIMEFRAME to allow detection
+                              # within the current period (4H = 240 min + 5 min buffer = 245)
+                              # This prevents acting on signals from previous 4H periods
                              
 # Trading Parameters
 USE_MAX_LEVERAGE = False      # True: Auto-detect and use max leverage, False: Use fixed leverage
@@ -83,7 +90,7 @@ ORDER_VALUE_MULTIPLIER = 1.0 # Multiplier for order size (1.0 = leverage value i
 # Risk Management
 USE_PERCENTAGE_OF_BALANCE = False  # True: Use % of balance, False: Use leverage multiplier
 PERCENTAGE_OF_BALANCE = 10.0       # % of account balance to risk per trade (if enabled)
-MAX_CONCURRENT_TRADES = 2          # Maximum number of open positions at once
+MAX_CONCURRENT_TRADES = 5          # Maximum number of open positions at once
 
 # Order Execution
 MARKET_ORDER = True          # True: Market order (immediate), False: Limit order

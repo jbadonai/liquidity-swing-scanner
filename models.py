@@ -170,6 +170,7 @@ class CRTAlert:
     candle_1_timestamp: datetime
     timeframe: str = "4h"
     body_ratio: float = 0.0  # Body ratio percentage (sweep candle / range candle)
+    htf_bias: str = "neutral"  # HTF trend bias ("bullish", "bearish", or "neutral")
     
     def format_message(self) -> str:
         """Format CRT alert message for Telegram"""
@@ -203,6 +204,9 @@ class CRTAlert:
             message += f"💎 *Take Profit:* `{take_profit:.8f}` (opposite {tp_label})\n"
             message += f"📊 *Risk/Reward:* `{abs(take_profit - self.candle_2_close) / abs(self.candle_2_close - self.sweep_price):.2f}:1`\n\n"
             message += f"📌 *Bias:* LONG (Buy)\n"
+            if self.htf_bias and self.htf_bias != "neutral":
+                htf_emoji = "✅" if self.htf_bias == "bullish" else "⚠️"
+                message += f"📈 *HTF Trend:* {self.htf_bias.upper()} {htf_emoji}\n"
             message += f"💡 *Rationale:* Low swept → Retail trapped short → Smart money long\n\n"
         else:
             message += f"🎯 *Entry:* `{self.candle_2_close:.8f}`\n"
@@ -210,6 +214,9 @@ class CRTAlert:
             message += f"💎 *Take Profit:* `{take_profit:.8f}` (opposite {tp_label})\n"
             message += f"📊 *Risk/Reward:* `{abs(self.candle_2_close - take_profit) / abs(self.sweep_price - self.candle_2_close):.2f}:1`\n\n"
             message += f"📌 *Bias:* SHORT (Sell)\n"
+            if self.htf_bias and self.htf_bias != "neutral":
+                htf_emoji = "✅" if self.htf_bias == "bearish" else "⚠️"
+                message += f"📉 *HTF Trend:* {self.htf_bias.upper()} {htf_emoji}\n"
             message += f"💡 *Rationale:* High swept → Retail trapped long → Smart money short\n\n"
         
         # PATTERN DETAILS SECOND

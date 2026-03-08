@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 from models import CRTAlert, MarketData
 from crt_detector import CRTDetector
+from htf_trend_analyzer import HTFTrendAnalyzer
 import config
 
 
@@ -14,25 +15,30 @@ class CRTScanner:
     
     def __init__(self):
         self.crt_detector = CRTDetector()
+        self.htf_analyzer = HTFTrendAnalyzer() if config.CRT_REQUIRE_HTF_ALIGNMENT else None
         self.timeframe = config.CRT_TIMEFRAME
         # Track last seen candle to avoid duplicate alerts
         self.last_candle_time: Dict[str, int] = {}
         # Signal freshness limit
         self.max_signal_age = timedelta(minutes=config.MAX_SIGNAL_AGE_MINUTES)
+        # Cache HTF bias per pair
+        self.htf_bias_cache: Dict[str, Optional[str]] = {}
     
     def initialize_pair(self, pair: str):
         """Initialize CRT tracking for a pair"""
         if pair not in self.last_candle_time:
             self.last_candle_time[pair] = 0
     
-    def scan_pair(self, pair: str, candles: List[MarketData]) -> Optional[CRTAlert]:
+    def scan_pair(self, pair: str, candles: List[MarketData], 
+                  htf_candles: Optional[List[MarketData]] = None) -> Optional[CRTAlert]:
         """
         Scan a pair for CRT pattern on COMPLETED candles only
         Ignores stale signals to prevent acting on old data
         
         Args:
             pair: Trading pair
-            candles: List of candles (need at least 3, most recent might be forming)
+            candles: List of 4H candles (need at least 3, most recent might be forming)
+            htf_candles: Optional list of higher timeframe candles for trend alignment
             
         Returns:
             CRTAlert if pattern detected in completed candles, None otherwise
@@ -59,6 +65,13 @@ class CRTScanner:
                 print(f"   ⏭️  {pair} already checked this candle, skipping")
             return None
         
+        # Get HTF bias if HTF alignment is enabled
+        htf_bias = None
+        if config.CRT_REQUIRE_HTF_ALIGNMENT and self.htf_analyzer and htf_candles:
+            htf_bias = self.htf_analyzer.get_trend_bias(htf_candles)
+            # Cache the bias
+            self.htf_bias_cache[pair] = htf_bias
+        
         # Detect CRT pattern (detector now checks candles[-3] and candles[-2])
         crt = self.crt_detector.detect_crt(candles)
         
@@ -68,6 +81,18 @@ class CRTScanner:
             if pair in ["BTCUSDT", "ETHUSDT"]:
                 print(f"   ❌ {pair} no CRT pattern detected")
             return None
+        
+        # Check HTF alignment if required
+        if config.CRT_REQUIRE_HTF_ALIGNMENT and self.htf_analyzer:
+            if not self.htf_analyzer.is_crt_aligned(crt["type"], htf_bias):
+                # CRT not aligned with HTF bias - reject
+                htf_label = htf_bias if htf_bias else "neutral"
+                print(f"   ⚠️  {pair} CRT ({crt['type']}) NOT aligned with HTF ({htf_label}) - rejected")
+                return None
+            else:
+                htf_label = htf_bias if htf_bias else "neutral"
+                if pair in ["BTCUSDT", "ETHUSDT"]:
+                    print(f"   ✅ {pair} CRT ({crt['type']}) aligned with HTF ({htf_label})")
         
         # CHECK SIGNAL FRESHNESS - Critical for trading safety
         signal_time = crt["timestamp"]
@@ -100,7 +125,8 @@ class CRTScanner:
             timestamp=crt["timestamp"],
             candle_1_timestamp=crt["candle_1_timestamp"],
             timeframe=self.timeframe,
-            body_ratio=crt.get("body_ratio", 0.0)
+            body_ratio=crt.get("body_ratio", 0.0),
+            htf_bias=htf_bias if htf_bias else "neutral"
         )
         
         # Log signal freshness for transparency

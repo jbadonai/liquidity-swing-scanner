@@ -67,6 +67,14 @@ CRT_MAX_BODY_RATIO = 40.0    # Max body of sweep candle as % of range candle bod
                              # Smaller sweep candle body = stronger reversal signal
                              # Set to 100 to disable this filter
 
+# Higher Timeframe (HTF) Alignment
+CRT_REQUIRE_HTF_ALIGNMENT = True  # True: Only take CRT signals aligned with HTF bias, False: Take all CRTs
+CRT_HTF_TIMEFRAME = "1d"          # Higher timeframe for trend bias ("1d" = Daily, "1w" = Weekly)
+                                  # Daily: Good for swing trades (4H CRT aligned with daily trend)
+                                  # Weekly: Good for position trades (4H CRT aligned with weekly trend)
+CRT_HTF_LOOKBACK = 20             # Number of HTF candles to analyze for trend (default: 20)
+                                  # Used to determine if HTF is in uptrend or downtrend
+
 # BYBIT AUTO-TRADING FOR CRT SIGNALS
 ENABLE_AUTO_TRADE = True     # True: Auto-execute CRT signals on ByBit, False: Alerts only
 BYBIT_API_KEY = "EHgJI02LmFspJeDh5m"           # Your ByBit API key
